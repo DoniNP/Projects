@@ -1,0 +1,105 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+```
+
+---
+title: "Human Activity Recognition: Movement Classifiers"
+author: "DoniNP"
+date: "January 28, 2016"
+output: html_document
+---
+
+## Executive Summary
+In order to classify the tested movement, this algorithem tried 3 different model for machine learning, i.e. Random Forest, Boosting, and LDA. After splitting the train data and validation 75:25, we compared the accuracy of those 3 methodologies: 99.77%, 98.84%, 71.47% from Random Forest, Boosting, and LDA, respectively. As a result the random forest is used to predict the test case that was given.
+
+The results were:
+B A B A A E D B A A B C B A E E A B B B
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement ??? a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+Detailed information is here: http://groupware.les.inf.puc-rio.br/har#ixzz3ym9JyemI
+
+## Importing Library and Reading Data
+```{r}
+library(AppliedPredictiveModeling)
+library(caret)
+library(randomForest)
+library(ggplot2)
+
+trainData <- read.csv("pml-training.csv")
+caseData <- read.csv("pml-testing.csv")
+```
+
+## Exploratory Data Analysis
+In order to understand more about the data, I tried an exploratory data analysis.
+```{r}
+dim(trainData)
+table(trainData$classe)
+```
+
+## Cleaning Data
+In order to lighten the burden of algorithm, I include only variable that effects on the prediction.
+```{r}
+trainData <- trainData[, 6:dim(trainData)[2]]
+
+#Categorizing columns that should be included, at least the data has 95% filled.
+benchmark <- dim(trainData)[1] * 0.95
+includeCol <- !apply(trainData, 2, function(x) sum(is.na(x)) > benchmark  || sum(x=="") > benchmark)
+trainData <- trainData[, includeCol]
+
+## Removing any near Zero Variance columns.
+excludeColumns <- nearZeroVar(trainData, saveMetrics = TRUE)
+trainData <- trainData[, excludeColumns$nzv==FALSE]
+```
+
+Let's see how many columns were trimmed.
+```{r}
+dim(trainData)
+```
+From the information above, we have trimmed those columns that have many NAs and columns that had near zero variance, resulting in 106 columns trimmed. This will make the algorithm run faster dan more accurate.
+
+## Data Segmentation
+In order for understand more about the model that is about to build, I took large validation portion, which is 25%.
+```{r}
+set.seed(7777)
+indexTraining <- createDataPartition(trainData$classe, p = 0.75)[[1]]
+forTraining = trainData[indexTraining,]
+forValidation = trainData[-indexTraining,]
+```
+
+## Model Selection
+The goal of model selection is to select the model that has the highest accuracy, I personally chose the 3 commonly-used method to build the model, they are Random Forest, Boosting, and LDA.
+
+```{r}
+set.seed(7777)
+suppressMessages(modelRF <- train(classe ~ . , data = forTraining, method = "rf"))
+suppressMessages(modelGBM <- train(classe ~ . , data = forTraining, method = "gbm"))
+suppressMessages(modelLDA <- train(classe ~ . , data = forTraining, method = "lda"))
+
+set.seed(7777)
+predictionRF <- predict(modelRF, forValidation)
+predictionGBM <- predict(modelGBM, forValidation)
+predictionLDA <- predict(modelLDA, forValidation)
+```
+
+## Checking for Accuracy
+By using Confusion Matrix, I can compare the accuracy of each model.
+```{r}
+confusionMatrix(forValidation$classe, predictionRF)
+confusionMatrix(forValidation$classe, predictionGBM)
+confusionMatrix(forValidation$classe, predictionLDA)
+```
+
+As the Random Forest has the highest accuracy, we will run with it.
+```{r}
+predictAnswer <- predict(modelRF, caseData)
+```
+
+## Result
+By using the modelRF built earlier, the algorithm has finally predicted the test case with the following result:
+```{r}
+predictAnswer
+```
